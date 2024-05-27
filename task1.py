@@ -1,6 +1,7 @@
 """
 Compute task 1: Find the maximum number in a list of numbers.
 """
+import time
 
 
 def single_node_compute():
