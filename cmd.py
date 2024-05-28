@@ -7,9 +7,9 @@ import mpi
 from control import ControlNode
 
 port = 9527
-# nodes = [("192.168.1.101", port), ("192.168.126.81", port)]
+nodes = [("192.168.1.101", port), ("192.168.126.81", port)]
 # nodes = [("192.168.126.81", port)]
-nodes = [("192.168.1.101", port)]
+# nodes = [("192.168.1.101", port)]
 
 
 def check_file_valid(filename):

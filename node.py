@@ -19,6 +19,10 @@ class ComputeServerNode(socket.socket):
         self.bind((host, port))
         self.listen(max_connections)
         self.connected_clt = None
+        self.__rank = -1
+
+    def set_rank_num(self, rank):
+        self.__rank = rank
 
     def shake_hands(self):
         print(f"{YELLOW}等待控制节点的连接...{RESET}")
@@ -36,7 +40,8 @@ class ComputeServerNode(socket.socket):
             print("已向控制节点发送握手消息")
         # recv_thread = threading.Thread(target=self.recv_msg)
         # recv_thread.start()
-        self.recv_msg()
+        rank_num = self.recv_msg()
+        self.set_rank_num(int(rank_num))
 
     def send_msg2control(self, message) -> bool:
         ctrl_skt = self.connected_clt["socket"]
@@ -57,9 +62,12 @@ class ComputeServerNode(socket.socket):
         try:
             data = ctrl_skt.recv(4096)
             msg = data.decode("utf-8")
-            print(msg)
+            hint, rank = msg.split("#")
+            print(hint + rank)
+            return rank
         except Exception as e:
             debug(e)
+
 
     def recv_file_content(self):
         """

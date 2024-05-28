@@ -87,7 +87,7 @@ class ControlNode(socket.socket):
         for i, msg in enumerate(msgs):
             print(f"已连接到计算节点{i}, 节点信息为{msg}")
             self.compute_nodes.append(f"node {i} " + msg)
-        self.send2all("握手成功，准备开始计算")
+        self.send2all("握手成功，已指定计算节点的rank ")
 
     def connect2nodes_all(self) -> bool:
         for client in self.clients:
@@ -105,9 +105,15 @@ class ControlNode(socket.socket):
         return msgs_from_nodes
 
     def send2all(self, msg) -> bool:
+        """
+        Send the rank number to compute node
+        :param msg:
+        :return:
+        """
         try:
-            for client in self.clients:
-                client.send(msg.encode("utf-8"))
+            for i, client in enumerate(self.clients):
+                full_msg = msg + "#" + str(i)
+                client.send(full_msg.encode("utf-8"))
         except Exception as e:
             debug(e)
             return False
