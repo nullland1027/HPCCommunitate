@@ -6,7 +6,7 @@ RED = "\033[31m"  # 红色文本
 GREEN = "\033[32m"  # 绿色文本
 YELLOW = "\033[33m"  # 黄色文本
 RESET = "\033[0m"  # 重置样式
-
+BUFFER_SIZE = 8192
 
 def debug(error):
     print(f"{RED}异常类型：{type(error).__name__}")
@@ -24,44 +24,44 @@ def get_local_ip_by_hostname():
         return None
 
 
-def init():
-    pass
+class MPI:
+    def __init__(self):
+        self.communicate_size = 0
+        self.communicate_rank = -1
 
+    def comm_rank(self):
+        """
+        Get the rank of the current process in the communicator.
+        May progress in the future. return the process set id. (multiprocess in one node)
+        :return: rank id
+        """
+        return self.communicate_rank
 
-def comm_rank(skt):
-    """
-    Get the rank of the current process in the communicator.
-    May progress in the future. return the process set id. (multi-process in one node)
-    :param skt: socket
-    :return: process id
-    """
-    return 0
+    def comm_size(self):
+        """
+        Get the number of processes in the communicator.
+        :return: number of processes
+        """
+        return self.communicate_size
 
+    def set_comm_rank(self, rank_id):
+        self.communicate_rank = rank_id
 
-def comm_size():
-    """
-    Get the number of processes in the communicator.
-    :return: number of processes
-    """
-    return 1
+    def set_comm_size(self, size):
+        self.communicate_size = size
 
-
-def get_processor_name(compute_node_skt):
-    """
-    Get the name of the processor. ip address
-    :return: processor name
-    """
-    ip = get_local_ip_by_hostname()
-    computer_name = socket.gethostname()
-    cpu_count = os.cpu_count()
-    pid = os.getpid()
-    return {
-        "ip": ip,
-        "name": computer_name,
-        "cpu cores": cpu_count,
-        "pid": pid
-    }
-
-
-def finalize():
-    pass
+    def get_processor_name(self):
+        """
+        Get the name of the processor. ip address
+        :return: processor name
+        """
+        ip = get_local_ip_by_hostname()
+        computer_name = socket.gethostname()
+        cpu_count = os.cpu_count()
+        pid = os.getpid()
+        return {
+            "ip": ip,
+            "name": computer_name,
+            "cpu cores": cpu_count,
+            "pid": pid
+        }

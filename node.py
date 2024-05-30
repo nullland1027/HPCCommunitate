@@ -2,11 +2,14 @@
 Run this on the compute node. It will start the process of compute. Waiting the control node to call it.
 Like a server
 """
+import os
 import socket
+import subprocess
+import sys
 import threading
 import time
 
-import mpi
+from mpi import MPI
 from mpi import debug, RED, YELLOW, RESET
 
 
@@ -19,10 +22,26 @@ class ComputeServerNode(socket.socket):
         self.bind((host, port))
         self.listen(max_connections)
         self.connected_clt = None
-        self.__rank = -1
+        self.__mpi = MPI()
+        self.__files = []
 
-    def set_rank_num(self, rank):
-        self.__rank = rank
+    def set_rank_id(self, rank):
+        self.__mpi.set_comm_rank(rank)
+
+    def get_rank_id(self) -> int:
+        return self.__mpi.comm_rank()
+
+    def set_nodes_num(self, size):
+        self.__mpi.set_comm_size(size)
+
+    def get_nodes_num(self):
+        return self.__mpi.comm_size()
+
+    def task_file(self):
+        return self.__files[-2]
+
+    def param_file(self):
+        return self.__files[-1]
 
     def shake_hands(self):
         print(f"{YELLOW}等待控制节点的连接...{RESET}")
@@ -35,15 +54,16 @@ class ComputeServerNode(socket.socket):
             "socket": c_skt
         }
         self.connected_clt = connected_clt
-        connected_msg = f"{mpi.get_processor_name(self)}"
+
+        connected_msg = f"{self.__mpi.get_processor_name()}"
         if self.send_msg2control(connected_msg):
             print("已向控制节点发送握手消息")
-        # recv_thread = threading.Thread(target=self.recv_msg)
-        # recv_thread.start()
-        rank_num = self.recv_msg()
-        self.set_rank_num(int(rank_num))
 
-    def send_msg2control(self, message) -> bool:
+        rank_id, nodes_num = self.recv_msg()
+        self.set_rank_id(int(rank_id))
+        self.set_nodes_num(int(nodes_num))
+
+    def send_msg2control(self, message: str) -> bool:
         ctrl_skt = self.connected_clt["socket"]
         try:
             ctrl_skt.send(message.encode("utf-8"))
@@ -55,19 +75,27 @@ class ComputeServerNode(socket.socket):
 
     def recv_msg(self):
         """
-        仅从控制节点接收一条消息
+        从控制节点接收一条消息
         :return:
         """
         ctrl_skt = self.connected_clt["socket"]
         try:
             data = ctrl_skt.recv(4096)
             msg = data.decode("utf-8")
-            hint, rank = msg.split("#")
-            print(hint + rank)
-            return rank
+            hint, rank_id, nodes_num = msg.split("#")
+            print(hint + f"{rank_id}/{nodes_num}")
+            return rank_id, nodes_num
         except Exception as e:
             debug(e)
 
+    def recv_partial_result(self):
+        ctrl_skt = self.connected_clt["socket"]
+        try:
+            data = ctrl_skt.recv(4096)
+            msg = data.decode("utf-8")
+            return msg.split("#")
+        except Exception as e:
+            debug(e)
 
     def recv_file_content(self):
         """
@@ -92,8 +120,8 @@ class ComputeServerNode(socket.socket):
                     break
 
                 while_times += 1
-                print(while_times)
-                time.sleep(1)
+                print("正在接收数据...")
+                time.sleep(5)
 
             if data:
                 msg = data.decode("utf-8")
@@ -105,6 +133,7 @@ class ComputeServerNode(socket.socket):
                 if "#" in msg:
                     filename, msg = msg.split("#", 1)
                     self.save_msg2file(filename, msg)
+                    self.__files.append(filename)
             else:
                 print("没有接收到任何数据")
 
@@ -121,6 +150,28 @@ class ComputeServerNode(socket.socket):
         with open(filename, "w") as f:
             f.write(msg)
         print(f"已保存到文件{filename}")
+
+    def run_task(self, task_file, param_file, nodes_num, rank_id, method: str):
+        """
+        Run the task, the main process will be blocked until subprocess is done.
+        :param task_file:
+        :return:
+        """
+        try:
+            result = subprocess.run(
+                [sys.executable, task_file, param_file, str(nodes_num), str(rank_id), method],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=True
+            )
+            node_result = result.stdout.strip()
+            print(f"节点 {self.__mpi.comm_rank()} 的计算结果: {node_result}")
+        except subprocess.CalledProcessError as cpe:
+            print(f"节点 {self.__mpi.comm_rank()} 的计算失败: {cpe.stderr}")
+            node_result = None
+
+        return node_result
 
     def release_port(self):
         self.running = False
@@ -147,12 +198,29 @@ if __name__ == '__main__':
                 t_recv_file.join()
                 print(">>>>>>> receive file done")
                 file_nums += 1
-                if file_nums == 2:  # Received 2 files
-                    # TODO 处理接收到的数据thread
-                    print("Processing data.")
+                if file_nums % 2 == 0:  # Received 2 files: task.py and param_file
+                    result = compute_node.run_task(compute_node.task_file(),
+                                                   compute_node.param_file(),
+                                                   compute_node.get_nodes_num(),
+                                                   compute_node.get_rank_id(),
+                                                   "map")  # Map: means get the partial result
 
-                    # TODO 发送处理结果thread
-                    print("Sending the result.")
+                    # send the result to control node
+                    compute_node.send_msg2control(str(result))
+
+                    # TODO receive the three numbers from control node, do the final computation
+                    if compute_node.get_rank_id() == 0:  # Node 0 do the final computation
+                        partial_result = compute_node.recv_partial_result()
+                        with open("tmp.txt", 'w') as f:
+                            f.write(",".join(partial_result))
+
+                        final_result = compute_node.run_task(compute_node.task_file(),
+                                                             "tmp.txt",
+                                                             compute_node.get_nodes_num(),
+                                                             compute_node.get_rank_id(),
+                                                             "reduce")
+                        compute_node.send_msg2control(str(final_result))
+                        os.remove("tmp.txt")
 
     except KeyboardInterrupt as kbi:
         compute_node.release_port()  # Release the port
