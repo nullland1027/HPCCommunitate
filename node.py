@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 
+import mpi
 from mpi import MPI
 from mpi import debug, RED, YELLOW, RESET
 
@@ -42,6 +43,12 @@ class ComputeServerNode(socket.socket):
 
     def param_file(self):
         return self.__files[-1]
+
+    def clear_files(self):
+        self.__files = []
+
+    def received_necessary_files(self):
+        return len(self.__files) == 2
 
     def shake_hands(self):
         print(f"{YELLOW}等待控制节点的连接...{RESET}")
@@ -80,7 +87,7 @@ class ComputeServerNode(socket.socket):
         """
         ctrl_skt = self.connected_clt["socket"]
         try:
-            data = ctrl_skt.recv(4096)
+            data = ctrl_skt.recv(mpi.BUFFER_SIZE)
             msg = data.decode("utf-8")
             hint, rank_id, nodes_num = msg.split("#")
             print(hint + f"{rank_id}/{nodes_num}")
@@ -91,7 +98,7 @@ class ComputeServerNode(socket.socket):
     def recv_partial_result(self):
         ctrl_skt = self.connected_clt["socket"]
         try:
-            data = ctrl_skt.recv(4096)
+            data = ctrl_skt.recv(mpi.BUFFER_SIZE)
             msg = data.decode("utf-8")
             return msg.split("#")
         except Exception as e:
@@ -107,7 +114,7 @@ class ComputeServerNode(socket.socket):
         try:
             data = b""
             while True:
-                chunk = ctrl_skt.recv(4096)
+                chunk = ctrl_skt.recv(mpi.BUFFER_SIZE)
                 if chunk == b'' and while_times == 0:  # 空数据块
                     print("控制节点没有发送数据")
                     break
@@ -154,6 +161,10 @@ class ComputeServerNode(socket.socket):
     def run_task(self, task_file, param_file, nodes_num, rank_id, method: str):
         """
         Run the task, the main process will be blocked until subprocess is done.
+        :param method:
+        :param rank_id:
+        :param nodes_num:
+        :param param_file:
         :param task_file:
         :return:
         """
@@ -190,15 +201,15 @@ if __name__ == '__main__':
                 print(">>>>>>>> Shake hands done")
 
             # Receive message from control node thread
-            file_nums = 0
+
             while compute_node.connected_clt is not None:
                 t_recv_file = threading.Thread(target=compute_node.recv_file_content, daemon=False)
                 t_recv_file.start()
                 print(">>>>>>> Blocked in receive file thread")
                 t_recv_file.join()
                 print(">>>>>>> receive file done")
-                file_nums += 1
-                if file_nums % 2 == 0:  # Received 2 files: task.py and param_file
+                # TODO BUGS: after existing, the compute node will out of range
+                if compute_node.received_necessary_files():  # MUST receive 2 files: task.py and param_file
                     result = compute_node.run_task(compute_node.task_file(),
                                                    compute_node.param_file(),
                                                    compute_node.get_nodes_num(),
@@ -221,6 +232,7 @@ if __name__ == '__main__':
                                                              "reduce")
                         compute_node.send_msg2control(str(final_result))
                         os.remove("tmp.txt")
+                    compute_node.clear_files()
 
     except KeyboardInterrupt as kbi:
         compute_node.release_port()  # Release the port

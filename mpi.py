@@ -8,6 +8,7 @@ YELLOW = "\033[33m"  # 黄色文本
 RESET = "\033[0m"  # 重置样式
 BUFFER_SIZE = 8192
 
+
 def debug(error):
     print(f"{RED}异常类型：{type(error).__name__}")
     print(f"异常信息：{error}")

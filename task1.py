@@ -44,7 +44,7 @@ def multi_node_compute(param_file, nodes_num: int, rank_id: int):
 
 if __name__ == '__main__':
     if len(sys.argv) != 5:
-        print("Usage: python node.py <param_file> <nodes_num> <rank_id> <map_or_reduce>")
+        print("Usage: python task1.py <param_file> <nodes_num> <rank_id> <map_or_reduce>")
         sys.exit(1)
 
     param_file = sys.argv[1]

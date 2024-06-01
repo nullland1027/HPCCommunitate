@@ -6,6 +6,7 @@ import socket
 import threading
 import time
 
+import mpi
 from mpi import debug, RESET, RED
 
 
@@ -35,31 +36,13 @@ class Client(socket.socket):
 
     def receive_msg(self) -> str:
         try:
-            data = self.recv(4096)
+            data = self.recv(mpi.BUFFER_SIZE)
             if not data:
                 print("服务器关闭连接")
             msg = data.decode("utf-8")
             return msg
         except Exception as e:
             debug(e)
-
-    # def send_file(self, file_path, nid):
-    #     """
-    #
-    #     :param file_path:
-    #     :param nid: node id
-    #     :return:
-    #     """
-    #     send_msg = f"{file_path}#"
-    #     with open(file_path, "r") as f:
-    #         while True:
-    #             data = f.read(4096)
-    #             send_msg += data
-    #             if not data:  # Until the end of the file
-    #                 print(f"{RED}Read operation done.{RESET}")
-    #                 break
-    #     self.send(send_msg.encode("utf-8"))
-    #     print(f"node {nid} 已发送文件 {file_path}")
 
     def send_file(self, file_path, nid):
         """
@@ -70,7 +53,7 @@ class Client(socket.socket):
         send_msg = f"{file_path}#"
         with open(file_path, "r") as f:
             while True:
-                data = f.read(4096)
+                data = f.read(mpi.BUFFER_SIZE)
                 if not data:  # 直到文件末尾
                     send_msg += "EOF"  # 文件结束标记
                     break
@@ -178,7 +161,7 @@ def compute(ctrl_node) -> bool:
         ctrl_node.send_files(code_file)
         ctrl_node.send_files(param_file)
 
-        # receive the result from compute node
+        # receive the partial result from all compute node
         msg_ls = ctrl_node.receive_msgs()
         msg = "#".join(msg_ls)
 
