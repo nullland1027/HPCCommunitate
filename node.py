@@ -169,14 +169,16 @@ class ComputeServerNode(socket.socket):
         :return:
         """
         try:
-            result = subprocess.run(
-                [sys.executable, task_file, param_file, str(nodes_num), str(rank_id), method],
+            process = subprocess.Popen(
+                args=[sys.executable, task_file, param_file, str(nodes_num), str(rank_id), method],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                check=True
+                bufsize=1
             )
-            node_result = result.stdout.strip()
+
+            node_result = mpi.show_progress_bar(process, total_steps=100)
+
             print(f"节点 {self.__mpi.comm_rank()} 的计算结果: {node_result}")
         except subprocess.CalledProcessError as cpe:
             print(f"节点 {self.__mpi.comm_rank()} 的计算失败: {cpe.stderr}")

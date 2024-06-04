@@ -3,7 +3,7 @@ import time
 
 import mpi
 from control import ControlNode
-from control import check_status, connect, compute, disconnect
+from control import check_status, connect, compute_on_ctrl_node, distributed_compute, disconnect
 
 port = 9527
 nodes = [("192.168.1.101", port), ("192.168.126.81", port)]
@@ -14,11 +14,8 @@ nodes = [("192.168.1.101", port), ("192.168.126.81", port)]
 if __name__ == '__main__':
     ctrl_node = ControlNode(nodes)
     while True:
-        print(f"{mpi.YELLOW}1. 检查计算节点连接状态")
-        print("2. 建立连接")
-        print("3. 发起计算任务")
-        print("4. 退出")
-        choice = input(f"请选择你要的功能：{mpi.RESET}")
+        print(mpi.MENU)
+        choice = input(mpi.MENU_USER_INPUT_HINT)
 
         if choice == "1":
             check_status(ctrl_node)
@@ -27,20 +24,26 @@ if __name__ == '__main__':
             try:
                 connect(ctrl_node)
             except socket.error as ose:
-                print(f"连接失败或重复连接: {ose}")
+                print(mpi.SOCKET_CONNECTION_ERROR, ose)
                 continue
 
         elif choice == "3":
-            if not compute(ctrl_node):
+            if not compute_on_ctrl_node():
                 continue
 
         elif choice == "4":
+            if not distributed_compute(ctrl_node):
+                continue
+
+        elif choice == "5":
             try:
                 disconnect(ctrl_node)
             except BrokenPipeError as bpe:
                 pass
+            except Exception as e:
+                pass
             exit(0)
 
         else:
-            print("输入错误，请重新输入")
+            print(mpi.USER_INPUT_ERROR)
         print()

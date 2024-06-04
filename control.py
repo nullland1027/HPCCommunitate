@@ -3,8 +3,12 @@ Run this file to connect the compute node. Call the compute node like a client.
 """
 import os
 import socket
+import subprocess
+import sys
 import threading
 import time
+
+from tqdm import tqdm
 
 import mpi
 from mpi import debug, RESET, RED
@@ -147,16 +151,27 @@ def connect(ctrl_node):
     print("receive message done")
 
 
-def compute(ctrl_node) -> bool:
+def compute_on_ctrl_node():
+    code_file, param_file, file_exist = user_interaction()
+    if file_exist:
+        start_time = time.perf_counter()
+        res = run_task_with_progress(code_file, param_file)
+        print(f"{mpi.COMPUTE_RESULT_HINT}{res}")
+        end_time = time.perf_counter()
+        mpi.time_consume(start_time, end_time)
+        return True
+    else:
+        print(mpi.FILE_NOT_FOUND_ERROR)
+        return False
+
+
+def distributed_compute(ctrl_node) -> bool:
     """
-    For choice 3
+    For choice 4
     :param ctrl_node:
     :return:
     """
-    code_file = input("请输入计算文件的路径：")
-    param_file = input("请输入参数文件的路径：")
-
-    can_be_sent = check_file_valid(code_file) and check_file_valid(param_file)
+    code_file, param_file, can_be_sent = user_interaction()
     if can_be_sent:
         ctrl_node.send_files(code_file)
         ctrl_node.send_files(param_file)
@@ -167,18 +182,18 @@ def compute(ctrl_node) -> bool:
 
         # then send the result to node 0 to get the final answer
         ctrl_node.clients[0].send2compute(msg)  # Send the result to node 0 and do the final computation
-        # TODO receive the final answer from node 0
+
         final_ans = ctrl_node.clients[0].receive_msg()
-        print(f"计算结果为：{final_ans}")
+        print(f"{mpi.COMPUTE_RESULT_HINT}{final_ans}")
         return True
     else:
-        print(f"{RED}文件输入有误，请重新输入！{RESET}")
+        print(mpi.FILE_NOT_FOUND_ERROR)
         return False
 
 
 def disconnect(ctrl_node):
     """
-    For choice 4
+    For choice 5
     :param ctrl_node:
     :return:
     """
@@ -190,3 +205,51 @@ def disconnect(ctrl_node):
 
 def check_file_valid(filename):
     return os.path.exists(filename)
+
+
+def user_interaction() -> tuple:
+    """
+    Ask the user to input the file path
+    :return: compute script file path, parameter file path, can be sent or not
+    """
+    code_file = input("请输入计算文件的路径：")
+    param_file = input("请输入参数文件的路径：")
+    can_be_sent = check_file_valid(code_file) and check_file_valid(param_file)
+    return code_file, param_file, can_be_sent
+
+
+def run_task_with_progress(task_script, param_file):
+    process = subprocess.Popen(
+        [sys.executable, task_script, param_file, '0', '0', 'single'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1  # 行缓冲
+    )
+
+    # 初始化进度条
+    progress_bar = None
+
+    # 读取 task3.py 的输出
+    final_ans = None
+    for output in iter(process.stdout.readline, ''):
+        if "TOTAL_STEPS" in output:
+            total_steps = int(output.split(' ')[1])
+        elif "PROGRESS" in output:
+            progress_info = output.strip().split(' ')[1]
+            current_step, _ = map(int, progress_info.split('/'))
+            if progress_bar is None:
+                progress_bar = tqdm(total=total_steps)
+            progress_bar.update(current_step - progress_bar.n)
+        elif "FINAL_ANS" in output:
+            final_ans = output.strip().split(' ')[1]
+
+    # 等待进程结束
+    process.wait()
+
+    # 关闭进度条
+    if progress_bar:
+        progress_bar.close()
+
+    # print(final_ans)
+    return final_ans
