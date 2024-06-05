@@ -26,6 +26,7 @@ class Client(socket.socket):
             return True
         except BrokenPipeError as bpe:
             print(f"{RED}服务器未上线！{RESET}")
+            mpi.debug(bpe)
             return False
         except Exception as e:
             print(f"连接服务器失败")
@@ -172,6 +173,7 @@ def distributed_compute(ctrl_node) -> bool:
     :return:
     """
     code_file, param_file, can_be_sent = user_interaction()
+    start_time = time.perf_counter()
     if can_be_sent:
         ctrl_node.send_files(code_file)
         ctrl_node.send_files(param_file)
@@ -184,7 +186,9 @@ def distributed_compute(ctrl_node) -> bool:
         ctrl_node.clients[0].send2compute(msg)  # Send the result to node 0 and do the final computation
 
         final_ans = ctrl_node.clients[0].receive_msg()
+        end_time = time.perf_counter()
         print(f"{mpi.COMPUTE_RESULT_HINT}{final_ans}")
+        mpi.time_consume(start_time, end_time)
         return True
     else:
         print(mpi.FILE_NOT_FOUND_ERROR)
@@ -230,7 +234,7 @@ def run_task_with_progress(task_script, param_file):
     # 初始化进度条
     progress_bar = None
 
-    # 读取 task3.py 的输出
+    # 读取 task.py 的输出
     final_ans = None
     for output in iter(process.stdout.readline, ''):
         if "TOTAL_STEPS" in output:

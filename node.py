@@ -8,7 +8,7 @@ import subprocess
 import sys
 import threading
 import time
-
+from tqdm import tqdm
 import mpi
 from mpi import MPI
 from mpi import debug, RED, YELLOW, RESET
@@ -177,7 +177,29 @@ class ComputeServerNode(socket.socket):
                 bufsize=1
             )
 
-            node_result = mpi.show_progress_bar(process, total_steps=100)
+            # 初始化进度条
+            progress_bar = None
+
+            # 读取 task.py 的输出
+            node_result = None
+            for output in iter(process.stdout.readline, ''):
+                if "TOTAL_STEPS" in output:
+                    total_steps = int(output.split(' ')[1])
+                elif "PROGRESS" in output:
+                    progress_info = output.strip().split(' ')[1]
+                    current_step, _ = map(int, progress_info.split('/'))
+                    if progress_bar is None:
+                        progress_bar = tqdm(total=total_steps)
+                    progress_bar.update(current_step - progress_bar.n)
+                elif "FINAL_ANS" in output:
+                    node_result = output.strip().split(' ')[1]
+
+            # 等待进程结束
+            process.wait()
+
+            # 关闭进度条
+            if progress_bar:
+                progress_bar.close()
 
             print(f"节点 {self.__mpi.comm_rank()} 的计算结果: {node_result}")
         except subprocess.CalledProcessError as cpe:
@@ -233,7 +255,7 @@ if __name__ == '__main__':
                                                              compute_node.get_rank_id(),
                                                              "reduce")
                         compute_node.send_msg2control(str(final_result))
-                        os.remove("tmp.txt")
+                        # os.remove("tmp.txt")
                     compute_node.clear_files()
 
     except KeyboardInterrupt as kbi:

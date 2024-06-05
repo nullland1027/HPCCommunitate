@@ -40,6 +40,21 @@ def max_n(param_file) -> int:
         mpi.debug(e)
 
 
+def map_compute(param_file, nodes_num, rank_id):
+    partial_count = 0
+    max_n_value = max_n(param_file)
+    iter_times = (max_n_value - (2 + rank_id)) // nodes_num
+    print(f"TOTAL_STEPS {iter_times}", flush=True)
+    for i in range(2 + rank_id, max_n_value + 1, nodes_num):
+        print(f"PROGRESS: {i + 1}/{iter_times}")
+        sys.stdout.flush()
+        if is_prime(i):
+            partial_count += 1
+
+    print(f"FINAL_ANS {partial_count}", flush=True)
+    return partial_count
+
+
 def compute_single(param_file):
     """
     Compute the count of prime numbers from 2 to max_n.
@@ -52,7 +67,7 @@ def compute_single(param_file):
         if is_prime(i):
             counter += 1
         print(f"PROGRESS: {i}/{maxn}")
-        sys.stdout.flush()  # 确保输出立即刷新
+        sys.stdout.flush()
     print(f"FINAL_ANS {counter}", flush=True)
 
 
@@ -64,6 +79,7 @@ def reduce_compute():
     with open("tmp.txt", 'r') as f:
         partial_counts = f.read()
     partial_counts = partial_counts.split(',')
+    print(f"FINAL_ANS {sum(map(int, partial_counts))}")
     return sum(map(int, partial_counts))
 
 
@@ -78,19 +94,9 @@ if __name__ == "__main__":
     method = sys.argv[4]
 
     if method == "map":
-        partial_count = 0
-        max_n_value = max_n(param_file)
-        iter_times = (max_n_value - (2 + rank_id)) // nodes_num
-        for i in range(2 + rank_id, max_n_value + 1, nodes_num):
-            print(f"PROGRESS: {i + 1}/{iter_times}")
-            sys.stdout.flush()
-            if is_prime(i):
-                partial_count += 1
-
-        print(partial_count)
+        map_compute(param_file, nodes_num, rank_id)
     elif method == "reduce":
         print(reduce_compute())
-        pass
     elif method == "single":
         print(compute_single(param_file))
     else:

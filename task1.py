@@ -1,7 +1,6 @@
 """
 Compute task 1: Find the maximum number in a list of numbers.
 """
-import os
 import random
 import sys
 
@@ -15,16 +14,26 @@ def generate_numbers():
             f.write(str(random.randint(-1000000, 1000000)) + ',')
 
 
-def single_node_compute(file_name: str):
+def single_node_compute(param_file: str):
     """
     Compute on a single node.
     """
-    with open(file_name, 'r') as f:
-        numbers = f.read().split(',')
-        return max(numbers, key=lambda x: int(x))
+    with open(param_file, 'r') as f:
+        numbers = f.read().split(',')[:-1]
+    numbers = list(map(int, numbers))
+    print(f"TOTAL_STEPS {len(numbers)}", flush=True)
+
+    max_num = numbers[0]
+    for i in range(0, len(numbers)):
+        if numbers[i] > max_num:
+            max_num = numbers[i]
+        print(f"PROGRESS: {i}/{len(numbers)}")
+        sys.stdout.flush()
+    print(f"FINAL_ANS {max_num}", flush=True)
+    return max_num
 
 
-def multi_node_compute(param_file, nodes_num: int, rank_id: int):
+def map_compute(param_file, nodes_num: int, rank_id: int):
     """
     Compute on multiple nodes.
     """
@@ -39,19 +48,42 @@ def multi_node_compute(param_file, nodes_num: int, rank_id: int):
     end_index = start_index + chunk_size + (1 if rank_id < remainder else 0)
 
     node_numbers = numbers[start_index:end_index]
-    return max(node_numbers)
+    print(f"TOTAL_STEPS {len(node_numbers)}", flush=True)
+
+    max_num = node_numbers[0]
+    for i in range(0, len(node_numbers)):
+        if node_numbers[i] > max_num:
+            max_num = node_numbers[i]
+        print(f"PROGRESS: {i}/{len(node_numbers)}")
+
+    print(f"FINAL_ANS {max_num}", flush=True)
+    return max_num
+
+
+def reduce_compute(tmp_file):
+    """
+    Compute on a single node.
+    """
+    with open(tmp_file, 'r') as f:
+        numbers = f.read().split(',')
+    ans = max(numbers, key=lambda x: int(x))
+    print(f"FINAL_ANS {ans}")
+    return ans
 
 
 if __name__ == '__main__':
     if len(sys.argv) != 5:
-        print("Usage: python task1.py <param_file> <nodes_num> <rank_id> <map_or_reduce>")
+        print(f"Usage: python task1.py <param_file> <nodes_num> <rank_id> <map, reduce, single>")
         sys.exit(1)
 
     param_file = sys.argv[1]
     nodes_num = int(sys.argv[2])
     rank_id = int(sys.argv[3])
     method = sys.argv[4]
+
     if method == "map":
-        print(multi_node_compute(param_file, nodes_num, rank_id))
+        print(map_compute(param_file, nodes_num, rank_id))
     elif method == "reduce":
-        print(single_node_compute("tmp.txt"))
+        print(reduce_compute("tmp.txt"))
+    elif method == "single":
+        print(single_node_compute(param_file))
