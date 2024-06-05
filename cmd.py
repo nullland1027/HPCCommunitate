@@ -6,7 +6,8 @@ from control import ControlNode
 from control import check_status, connect, compute_on_ctrl_node, distributed_compute, disconnect
 
 port = 9527
-nodes = [("192.168.2.177", port-1), ("192.168.2.177", port), ("192.168.2.177", port+1)]
+# nodes = [("192.168.2.177", port-1), ("192.168.2.177", port), ("192.168.2.177", port+1)]
+nodes = [("192.168.1.101", port-1), ("192.168.1.101", port), ("192.168.1.101", port+1)]
 # nodes = [("192.168.126.81", port)]
 # nodes = [("192.168.1.101", port)]
 
@@ -15,7 +16,8 @@ if __name__ == '__main__':
     ctrl_node = ControlNode(nodes)
     while True:
         print(mpi.MENU)
-        choice = input(mpi.MENU_USER_INPUT_HINT)
+        print(mpi.MENU_USER_INPUT_HINT)
+        choice = input()
 
         if choice == "1":
             check_status(ctrl_node)

@@ -116,7 +116,6 @@ class ComputeServerNode(socket.socket):
             while True:
                 chunk = ctrl_skt.recv(mpi.BUFFER_SIZE)
                 if chunk == b'' and while_times == 0:  # 空数据块
-                    print("控制节点没有发送数据")
                     break
 
                 data += chunk
@@ -127,11 +126,11 @@ class ComputeServerNode(socket.socket):
                     break
 
                 while_times += 1
-                print("正在接收数据...")
-                time.sleep(5)
+
 
             if data:
                 msg = data.decode("utf-8")
+
                 msg = msg.replace("EOF", "")
                 if msg == "QUIT":
                     print(f"{RED}控制节点已退出{RESET}")
@@ -143,7 +142,7 @@ class ComputeServerNode(socket.socket):
                     self.__files.append(filename)
             else:
                 print("没有接收到任何数据")
-
+                self.connected_clt = None
         except BlockingIOError:
             print("暂时没有数据可用")
         except Exception as e:
@@ -182,17 +181,25 @@ class ComputeServerNode(socket.socket):
 
             # 读取 task.py 的输出
             node_result = None
+            total_steps = 0
+            last_step = 0
+
             for output in iter(process.stdout.readline, ''):
                 if "TOTAL_STEPS" in output:
                     total_steps = int(output.split(' ')[1])
                 elif "PROGRESS" in output:
                     progress_info = output.strip().split(' ')[1]
-                    current_step, _ = map(int, progress_info.split('/'))
+                    current_step = int(progress_info.split('/')[0])
                     if progress_bar is None:
                         progress_bar = tqdm(total=total_steps)
-                    progress_bar.update(current_step - progress_bar.n)
+
+                    # 计算步长增量并更新进度条
+                    step_increment = current_step - last_step
+                    progress_bar.update(step_increment)
+                    last_step = current_step
                 elif "FINAL_ANS" in output:
-                    node_result = output.strip().split(' ')[1]
+                    node_result = int(output.strip().split(' ')[1])
+                    break
 
             # 等待进程结束
             process.wait()
@@ -214,24 +221,24 @@ class ComputeServerNode(socket.socket):
 
 
 if __name__ == '__main__':
-    compute_node = ComputeServerNode("0.0.0.0", 9527)
+    compute_node = ComputeServerNode("0.0.0.0", 9528)
     try:
         while compute_node.running:
             if compute_node.connected_clt is None:  # With NO control node connected
                 t_shake_hand = threading.Thread(target=compute_node.shake_hands, daemon=False)
                 t_shake_hand.start()
-                print(">>>>>>>> Blocked in shake hands thread")
+                # print(">>>>>>>> Blocked in shake hands thread")
                 t_shake_hand.join()
-                print(">>>>>>>> Shake hands done")
+                # print(">>>>>>>> Shake hands done")
 
             # Receive message from control node thread
 
             while compute_node.connected_clt is not None:
                 t_recv_file = threading.Thread(target=compute_node.recv_file_content, daemon=False)
                 t_recv_file.start()
-                print(">>>>>>> Blocked in receive file thread")
+                # print(">>>>>>> Blocked in receive file thread")
                 t_recv_file.join()
-                print(">>>>>>> receive file done")
+                # print(">>>>>>> receive file done")
                 # TODO BUGS: after existing, the compute node will out of range
                 if compute_node.received_necessary_files():  # MUST receive 2 files: task.py and param_file
                     result = compute_node.run_task(compute_node.task_file(),

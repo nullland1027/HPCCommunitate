@@ -1,17 +1,7 @@
 """
 Compute task 1: Find the maximum number in a list of numbers.
 """
-import random
 import sys
-
-
-def generate_numbers():
-    """
-    Generate numbers and write them to a file.
-    """
-    with open("numbers.txt", 'w') as f:
-        for i in range(30000):
-            f.write(str(random.randint(-1000000, 1000000)) + ',')
 
 
 def single_node_compute(param_file: str):
@@ -27,8 +17,7 @@ def single_node_compute(param_file: str):
     for i in range(0, len(numbers)):
         if numbers[i] > max_num:
             max_num = numbers[i]
-        print(f"PROGRESS: {i}/{len(numbers)}")
-        sys.stdout.flush()
+        print(f"PROGRESS: {i + 1}/{len(numbers)}", flush=True)
     print(f"FINAL_ANS {max_num}", flush=True)
     return max_num
 
@@ -54,7 +43,7 @@ def map_compute(param_file, nodes_num: int, rank_id: int):
     for i in range(0, len(node_numbers)):
         if node_numbers[i] > max_num:
             max_num = node_numbers[i]
-        print(f"PROGRESS: {i}/{len(node_numbers)}")
+        print(f"PROGRESS: {i + 1}/{len(node_numbers)}")
 
     print(f"FINAL_ANS {max_num}", flush=True)
     return max_num
@@ -72,9 +61,6 @@ def reduce_compute(tmp_file):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 5:
-        print(f"Usage: python task1.py <param_file> <nodes_num> <rank_id> <map, reduce, single>")
-        sys.exit(1)
 
     param_file = sys.argv[1]
     nodes_num = int(sys.argv[2])

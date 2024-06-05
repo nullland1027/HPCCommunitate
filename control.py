@@ -64,6 +64,7 @@ class Client(socket.socket):
                     break
                 send_msg += data
         self.send(send_msg.encode("utf-8"))
+        send_msg = ""  # clear the message buffer
         print(f"节点 {nid} 已发送文件 {file_path}")
 
     def say_goodbye(self):
@@ -176,6 +177,7 @@ def distributed_compute(ctrl_node) -> bool:
     start_time = time.perf_counter()
     if can_be_sent:
         ctrl_node.send_files(code_file)
+        time.sleep(0.1)
         ctrl_node.send_files(param_file)
 
         # receive the partial result from all compute node
@@ -188,7 +190,8 @@ def distributed_compute(ctrl_node) -> bool:
         final_ans = ctrl_node.clients[0].receive_msg()
         end_time = time.perf_counter()
         print(f"{mpi.COMPUTE_RESULT_HINT}{final_ans}")
-        mpi.time_consume(start_time, end_time)
+
+        mpi.time_consume(start_time, end_time - 0.1)
         return True
     else:
         print(mpi.FILE_NOT_FOUND_ERROR)
@@ -203,7 +206,7 @@ def disconnect(ctrl_node):
     """
     for client in ctrl_node.clients:
         client.say_goodbye()
-        time.sleep(1)
+        time.sleep(0.1)
         client.close()
 
 
@@ -236,6 +239,7 @@ def run_task_with_progress(task_script, param_file):
 
     # 读取 task.py 的输出
     final_ans = None
+    total_steps = 0
     for output in iter(process.stdout.readline, ''):
         if "TOTAL_STEPS" in output:
             total_steps = int(output.split(' ')[1])

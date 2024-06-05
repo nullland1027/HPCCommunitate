@@ -4,16 +4,6 @@ import time
 import mpi
 
 
-def long_running_task():
-    total_steps = 100
-    for step in range(total_steps):
-        time.sleep(0.02)  # 模拟长时间运行的任务
-        # 输出进度信息到标准输出
-        print(f"PROGRESS: {step + 1}/{total_steps}")
-        sys.stdout.flush()  # 确保输出立即刷新
-    print("Task done!")
-
-
 def is_prime(n: int) -> bool:
     if n < 2:
         return False
@@ -30,7 +20,7 @@ def max_n(param_file) -> int:
     :return:
     """
     try:
-        with open(param_file, 'r') as f:
+        with open(param_file, 'r', encoding="utf-8") as f:
             n = int(f.read().strip())
         return n
     except FileNotFoundError:
@@ -43,11 +33,11 @@ def max_n(param_file) -> int:
 def map_compute(param_file, nodes_num, rank_id):
     partial_count = 0
     max_n_value = max_n(param_file)
-    iter_times = (max_n_value - (2 + rank_id)) // nodes_num
+    iter_times = (max_n_value - (2 + rank_id)) // nodes_num + 1
     print(f"TOTAL_STEPS {iter_times}", flush=True)
     for i in range(2 + rank_id, max_n_value + 1, nodes_num):
-        print(f"PROGRESS: {i + 1}/{iter_times}")
-        sys.stdout.flush()
+        current_step = (i - (2 + rank_id)) // nodes_num + 1
+        print(f"PROGRESS: {current_step}/{iter_times}", flush=True)
         if is_prime(i):
             partial_count += 1
 
@@ -76,7 +66,7 @@ def reduce_compute():
     Read the partial counts from tmp.txt and return the sum.
     :return:
     """
-    with open("tmp.txt", 'r') as f:
+    with open("tmp.txt", 'r', encoding="utf-8") as f:
         partial_counts = f.read()
     partial_counts = partial_counts.split(',')
     print(f"FINAL_ANS {sum(map(int, partial_counts))}")
@@ -84,10 +74,6 @@ def reduce_compute():
 
 
 if __name__ == "__main__":
-    # long_running_task()
-    if len(sys.argv) != 5:
-        print("Usage: python task2.py <param_file> <nodes_num> <rank_id> <map, reduce, single>")
-        sys.exit(1)
     param_file = sys.argv[1]
     nodes_num = int(sys.argv[2])
     rank_id = int(sys.argv[3])
