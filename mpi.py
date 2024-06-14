@@ -12,10 +12,20 @@ RESET = "\033[0m"  # 重置样式
 FILE_NOT_FOUND_ERROR = f"{RED}文件输入有误，请重新输入！{RESET}"
 SOCKET_CONNECTION_ERROR = f"{RED}连接服务器失败或重复连接！{RESET}"
 USER_INPUT_ERROR = f"{RED}用户输入有误，请重新输入！{RESET}"
+CONTROL_NODE_EXIT_ERROR = f"{RED}控制节点已退出{RESET}"
+
+COMPUTE_NODE_NO_DATA_WARNING = "没有接收到任何数据"
+COMPUTE_NODE_NO_DATA_WARNING2 = "暂时没有数据可用"
 MENU = f"{YELLOW}1. 检查计算节点连接状态\n2. 建立连接\n3. 发起单机计算任务\n4. 发起多机计算任务\n5. 退出{RESET}"
 MENU_USER_INPUT_HINT = f"{YELLOW}请选择你要的功能：{RESET}"
 COMPUTE_RESULT_HINT = f"{GREEN}计算结果为：{RESET}"
 
+SHAKE_HANDS_WELCOME = f"{YELLOW}等待控制节点的连接...{RESET}"
+SHAKE_HANDS_CONNECTED = f"已收到控制节点的连接请求，地址为"
+SHAKE_HANDS_SUCCESS = f"已向控制节点发送握手消息"
+BROADCAST_TASK = "task3.py"
+MULTI_MAP_REDUCE_SPLIT = "NOTFINISH"
+TEMP_FILE = "tmp.txt"
 BUFFER_SIZE = 8192
 
 

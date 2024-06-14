@@ -40,6 +40,7 @@ class Client(socket.socket):
             debug(e)
 
     def receive_msg(self) -> str:
+        """Return the message in string type."""
         try:
             data = self.recv(mpi.BUFFER_SIZE)
             if not data:
@@ -82,7 +83,7 @@ class ControlNode(socket.socket):
 
     def shake_hands(self):
         print("连接到计算节点...")
-        msgs = self.receive_msgs()
+        msgs = self.receive_msgs_from_all_nodes()
         for i, msg in enumerate(msgs):
             print(f"已连接到计算节点{i}, 节点信息为{msg}")
             self.compute_nodes.append(f"node {i} " + msg)
@@ -96,7 +97,7 @@ class ControlNode(socket.socket):
                 return False
         return True
 
-    def receive_msgs(self) -> list:
+    def receive_msgs_from_all_nodes(self) -> list:
         msgs_from_nodes = []
         for client in self.clients:
             msg = client.receive_msg()
@@ -111,7 +112,7 @@ class ControlNode(socket.socket):
         """
         try:
             for i, client in enumerate(self.clients):
-                full_msg = msg + "#" + str(i) + "#" + str(len(self.clients))
+                full_msg = f"{msg}#{str(i)}#{str(len(self.clients))}"
                 client.send(full_msg.encode("utf-8"))
         except Exception as e:
             debug(e)
@@ -174,20 +175,34 @@ def distributed_compute(ctrl_node) -> bool:
     :return:
     """
     code_file, param_file, can_be_sent = user_interaction()
-    start_time = time.perf_counter()
-    if can_be_sent:
+    if can_be_sent:  # Valid files
+        start_time = time.perf_counter()
+
+        # send the file to all compute node
         ctrl_node.send_files(code_file)
         time.sleep(0.1)
         ctrl_node.send_files(param_file)
 
         # receive the partial result from all compute node
-        msg_ls = ctrl_node.receive_msgs()
+        msg_ls = ctrl_node.receive_msgs_from_all_nodes()
         msg = "#".join(msg_ls)
 
         # then send the result to node 0 to get the final answer
         ctrl_node.clients[0].send2compute(msg)  # Send the result to node 0 and do the final computation
 
+        # receive the final answer from node 0. If no send, will be blocked here
+        # for task3, the answer is the global max number
         final_ans = ctrl_node.clients[0].receive_msg()
+
+        # TODO: the judgement here for `final_ans` if need to do the next map-reduce iteration
+        if "NOTFINISH" in final_ans:
+            broadcast_msg = final_ans.replace("NOTFINISH", "")
+            ctrl_node.send2all(broadcast_msg)
+
+            msg_ls = ctrl_node.receive_msgs_from_all_nodes()
+            final_ans = max(msg_ls, key=lambda x: int(x))
+
+        # Over
         end_time = time.perf_counter()
         print(f"{mpi.COMPUTE_RESULT_HINT}{final_ans}")
 

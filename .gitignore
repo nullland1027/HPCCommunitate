@@ -1,6 +1,7 @@
-numbers.txt
+p1.txt
 .DS_Store
 send.sh
 num.txt
 .gitignore
-maxn.txt
+p2.txt
+p3.txt

@@ -7,8 +7,9 @@ import socket
 import subprocess
 import sys
 import threading
-import time
+
 from tqdm import tqdm
+
 import mpi
 from mpi import MPI
 from mpi import debug, RED, YELLOW, RESET
@@ -51,11 +52,11 @@ class ComputeServerNode(socket.socket):
         return len(self.__files) == 2
 
     def shake_hands(self):
-        print(f"{YELLOW}等待控制节点的连接...{RESET}")
+        print(mpi.SHAKE_HANDS_WELCOME)
         c_skt, addr = self.accept()
         c_skt.setblocking(True)
 
-        print(f"已收到控制节点的连接请求，地址为{addr}")
+        print(f"{mpi.SHAKE_HANDS_CONNECTED}{addr}")
         connected_clt = {
             "addr": addr,
             "socket": c_skt
@@ -64,7 +65,7 @@ class ComputeServerNode(socket.socket):
 
         connected_msg = f"{self.__mpi.get_processor_name()}"
         if self.send_msg2control(connected_msg):
-            print("已向控制节点发送握手消息")
+            print(mpi.SHAKE_HANDS_SUCCESS)
 
         rank_id, nodes_num = self.recv_msg()
         self.set_rank_id(int(rank_id))
@@ -76,7 +77,7 @@ class ComputeServerNode(socket.socket):
             ctrl_skt.send(message.encode("utf-8"))
             return True
         except Exception as e:
-            print(f"向控制节点发送消息失败，错误代码：{e}")
+            mpi.debug(e)
             self.close()
             return False
 
@@ -95,7 +96,7 @@ class ComputeServerNode(socket.socket):
         except Exception as e:
             debug(e)
 
-    def recv_partial_result(self):
+    def recv_partial_result(self) -> list:
         ctrl_skt = self.connected_clt["socket"]
         try:
             data = ctrl_skt.recv(mpi.BUFFER_SIZE)
@@ -127,13 +128,12 @@ class ComputeServerNode(socket.socket):
 
                 while_times += 1
 
-
             if data:
                 msg = data.decode("utf-8")
 
                 msg = msg.replace("EOF", "")
                 if msg == "QUIT":
-                    print(f"{RED}控制节点已退出{RESET}")
+                    print(mpi.CONTROL_NODE_EXIT_ERROR)
                     self.connected_clt = None
                     return
                 if "#" in msg:
@@ -141,10 +141,11 @@ class ComputeServerNode(socket.socket):
                     self.save_msg2file(filename, msg)
                     self.__files.append(filename)
             else:
-                print("没有接收到任何数据")
+                print(mpi.COMPUTE_NODE_NO_DATA_WARNING)
                 self.connected_clt = None
+
         except BlockingIOError:
-            print("暂时没有数据可用")
+            print(mpi.COMPUTE_NODE_NO_DATA_WARNING2)
         except Exception as e:
             debug(e)
 
@@ -221,7 +222,7 @@ class ComputeServerNode(socket.socket):
 
 
 if __name__ == '__main__':
-    compute_node = ComputeServerNode("0.0.0.0", 9528)
+    compute_node = ComputeServerNode("0.0.0.0", 9526)
     try:
         while compute_node.running:
             if compute_node.connected_clt is None:  # With NO control node connected
@@ -231,38 +232,58 @@ if __name__ == '__main__':
                 t_shake_hand.join()
                 # print(">>>>>>>> Shake hands done")
 
-            # Receive message from control node thread
-
-            while compute_node.connected_clt is not None:
+            while compute_node.connected_clt is not None:  # Connected control node
                 t_recv_file = threading.Thread(target=compute_node.recv_file_content, daemon=False)
-                t_recv_file.start()
+                t_recv_file.start()  # Ready to receive file
                 # print(">>>>>>> Blocked in receive file thread")
                 t_recv_file.join()
                 # print(">>>>>>> receive file done")
-                # TODO BUGS: after existing, the compute node will out of range
+
                 if compute_node.received_necessary_files():  # MUST receive 2 files: task.py and param_file
+                    # Map the task, get the partial result
                     result = compute_node.run_task(compute_node.task_file(),
                                                    compute_node.param_file(),
                                                    compute_node.get_nodes_num(),
                                                    compute_node.get_rank_id(),
                                                    "map")  # Map: means get the partial result
 
-                    # send the result to control node
+                    # send the partial result to control node
                     compute_node.send_msg2control(str(result))
 
-                    # TODO receive the three numbers from control node, do the final computation
+                    # Reduce the partial results in node 0
                     if compute_node.get_rank_id() == 0:  # Node 0 do the final computation
                         partial_result = compute_node.recv_partial_result()
                         with open("tmp.txt", 'w') as f:
                             f.write(",".join(partial_result))
 
+                        # Compute the final result
                         final_result = compute_node.run_task(compute_node.task_file(),
-                                                             "tmp.txt",
+                                                             mpi.TEMP_FILE,
                                                              compute_node.get_nodes_num(),
                                                              compute_node.get_rank_id(),
                                                              "reduce")
+
+                        # Send the final result to control node, for task3, it will be the global max number
+                        if compute_node.task_file() == mpi.BROADCAST_TASK:
+                            compute_node.send_msg2control(str(final_result) + mpi.MULTI_MAP_REDUCE_SPLIT)
+                        else:
+                            compute_node.send_msg2control(str(final_result))
+                        os.remove(mpi.TEMP_FILE)
+
+                    if compute_node.task_file() == mpi.BROADCAST_TASK:
+                        # TODO: receive the broadcast message from control node
+                        value_from_broadcast = compute_node.recv_partial_result()[0]
+                        with open("tmp.txt", 'w') as f:
+                            f.write(str(value_from_broadcast).strip())
+                        final_result = compute_node.run_task(compute_node.task_file(),
+                                                             compute_node.param_file(),
+                                                             compute_node.get_nodes_num(),
+                                                             compute_node.get_rank_id(),
+                                                             "compute")
+
+                        # Send the partial coprime result to control node
                         compute_node.send_msg2control(str(final_result))
-                        # os.remove("tmp.txt")
+
                     compute_node.clear_files()
 
     except KeyboardInterrupt as kbi:

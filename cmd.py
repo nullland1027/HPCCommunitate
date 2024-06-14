@@ -7,8 +7,9 @@ from control import check_status, connect, compute_on_ctrl_node, distributed_com
 
 port = 9527
 # nodes = [("192.168.2.177", port-1), ("192.168.2.177", port), ("192.168.2.177", port+1)]
+# nodes = [("192.168.1.101", port-1), ("192.168.1.101", port), ("192.168.1.101", port+1)]
+# nodes = [("192.168.126.81", port), ("192.168.1.101", port)]
 nodes = [("192.168.1.101", port-1), ("192.168.1.101", port), ("192.168.1.101", port+1)]
-# nodes = [("192.168.126.81", port)]
 # nodes = [("192.168.1.101", port)]
 
 
